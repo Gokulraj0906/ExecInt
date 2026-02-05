@@ -42,7 +42,7 @@ const ROLE_OPTIONS: RoleOption[] = [
         icon: <Shield className="w-5 h-5" />,
         description: 'Full access & control',
         color: 'from-purple-500 to-purple-700',
-        requiresGmail: true,
+        requiresGmail: false,
     },
     {
         value: 'SUPERVISOR',
