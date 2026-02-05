@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import * as XLSX from 'xlsx';
 import {
   BarChart3,
   Bell,
@@ -9,17 +10,14 @@ import {
   LogOut,
   Menu,
   Search,
-  Settings,
   Shield,
   User,
   Users,
-  X,
   AlertTriangle,
   Loader,
   RefreshCw,
   Filter,
   Download,
-  Eye,
   MapPin,
   Package,
   Wrench,
@@ -28,8 +26,9 @@ import {
   ArrowUpRight,
   MoreVertical,
   CheckCircle2,
-  Clock,
   Zap,
+  Info,
+  XCircle
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -111,6 +110,14 @@ interface DashboardState {
   activeTab: 'overview' | 'factories' | 'orders' | 'assignments' | 'resources';
 }
 
+interface Notification {
+  id: string;
+  title: string;
+  message: string;
+  time: string;
+  type: 'info' | 'alert' | 'success';
+}
+
 // --- Component ---
 
 const Dashboard: React.FC = () => {
@@ -129,12 +136,31 @@ const Dashboard: React.FC = () => {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+
+  // Mock Notifications
+  const notifications: Notification[] = [
+    { id: '1', title: 'System Update', message: 'Platform optimization complete.', time: '2m ago', type: 'success' },
+    { id: '2', title: 'New Alert', message: 'High risk detected in Factory Alpha.', time: '15m ago', type: 'alert' },
+    { id: '3', title: 'Shift Change', message: 'Morning shift ending soon.', time: '1h ago', type: 'info' },
+  ];
+
+  const notificationRef = useRef<HTMLDivElement>(null);
 
   const baseUrl = 'https://ai-execution.onrender.com';
   const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
 
   useEffect(() => {
     fetchDashboardData();
+
+    // Click outside to close notifications
+    const handleClickOutside = (event: MouseEvent) => {
+      if (notificationRef.current && !notificationRef.current.contains(event.target as Node)) {
+        setNotificationsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
   const fetchDashboardData = async () => {
@@ -217,6 +243,73 @@ const Dashboard: React.FC = () => {
     window.location.href = '/';
   };
 
+  const handleExportReport = () => {
+    const wb = XLSX.utils.book_new();
+
+    // 1. Dashboard Overview Sheet
+    const overviewData = [
+      { Metric: 'Total Factories', Value: state.factories.length },
+      { Metric: 'At Risk Orders', Value: state.atRiskOrders.length },
+      { Metric: 'Active Assignments', Value: state.allAssignments.length },
+      { Metric: 'Total Resources', Value: state.resources.length },
+      { Metric: 'Active Resources', Value: state.resources.filter(r => r.isActive).length },
+    ];
+    const wsOverview = XLSX.utils.json_to_sheet(overviewData);
+    XLSX.utils.book_append_sheet(wb, wsOverview, "Overview");
+
+    // 2. Factories Sheet
+    if (state.factories.length > 0) {
+      const wsFactories = XLSX.utils.json_to_sheet(state.factories.map(f => ({
+        ID: f.id,
+        Name: f.name,
+        Location: f.location,
+        Created: new Date(f.createdAt).toLocaleDateString()
+      })));
+      XLSX.utils.book_append_sheet(wb, wsFactories, "Factories");
+    }
+
+    // 3. Work Orders Sheet
+    if (state.workOrders.length > 0) {
+      const wsOrders = XLSX.utils.json_to_sheet(state.workOrders.map(o => ({
+        Code: o.code,
+        Status: o.status,
+        Priority: o.priority,
+        DueDate: new Date(o.dueDate).toLocaleDateString(),
+        FactoryID: o.factoryId,
+        IsAtRisk: o.isAtRisk ? 'Yes' : 'No',
+        RiskReason: o.riskReason || '-'
+      })));
+      XLSX.utils.book_append_sheet(wb, wsOrders, "Work Orders");
+    }
+
+    // 4. Resources Sheet
+    if (state.resources.length > 0) {
+      const wsResources = XLSX.utils.json_to_sheet(state.resources.map(r => ({
+        Name: r.name,
+        Code: r.code,
+        Type: r.type,
+        Status: r.isActive ? 'Active' : 'Inactive',
+        FactoryID: r.factoryId
+      })));
+      XLSX.utils.book_append_sheet(wb, wsResources, "Resources");
+    }
+
+    // 5. Assignments Sheet
+    if (state.allAssignments.length > 0) {
+      const wsAssignments = XLSX.utils.json_to_sheet(state.allAssignments.map(a => ({
+        Task: a.task.title,
+        Status: a.status,
+        ResourceID: a.resourceId,
+        WorkOrderID: a.workOrderId,
+        Created: new Date(a.createdAt).toLocaleDateString()
+      })));
+      XLSX.utils.book_append_sheet(wb, wsAssignments, "Assignments");
+    }
+
+    // Generate and download
+    XLSX.writeFile(wb, `ExecInt_Report_${new Date().toISOString().split('T')[0]}.xlsx`);
+  };
+
   // --- Helpers ---
 
   const getRoleIcon = (role: string) => {
@@ -287,21 +380,21 @@ const Dashboard: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-[#FAFAFA] relative overflow-hidden flex">
-      {/* Animated Gradient Background */}
+      {/* Animated Gradient Background - IMPROVED VISIBILITY */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
         {/* Grid Pattern */}
         <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808008_1px,transparent_1px),linear-gradient(to_bottom,#80808008_1px,transparent_1px)] bg-[size:24px_24px]"></div>
 
-        {/* Moving Blobs */}
-        <div className="absolute top-0 right-[-10%] w-[800px] h-[800px] bg-purple-200/30 rounded-full blur-[100px] animate-pulse" style={{ animationDuration: '8s' }}></div>
-        <div className="absolute bottom-[-10%] left-[-10%] w-[800px] h-[800px] bg-indigo-200/30 rounded-full blur-[100px] animate-pulse" style={{ animationDuration: '10s', animationDelay: '1s' }}></div>
-        <div className="absolute top-[40%] left-[30%] w-[600px] h-[600px] bg-orange-100/30 rounded-full blur-[80px] animate-pulse" style={{ animationDuration: '12s', animationDelay: '2s' }}></div>
+        {/* Moving Blobs - Stronger Colors */}
+        <div className="absolute top-0 right-[-10%] w-[800px] h-[800px] bg-purple-300/40 rounded-full blur-[80px] animate-pulse" style={{ animationDuration: '6s' }}></div>
+        <div className="absolute bottom-[-10%] left-[-10%] w-[800px] h-[800px] bg-indigo-300/40 rounded-full blur-[80px] animate-pulse" style={{ animationDuration: '8s', animationDelay: '1s' }}></div>
+        <div className="absolute top-[40%] left-[30%] w-[600px] h-[600px] bg-orange-200/40 rounded-full blur-[60px] animate-pulse" style={{ animationDuration: '10s', animationDelay: '2s' }}></div>
       </div>
 
       {/* Sidebar */}
       <aside
         className={cn(
-          'fixed lg:static inset-y-0 left-0 z-40 w-72 bg-white/60 backdrop-blur-xl border-r border-white/40 shadow-[4px_0_24px_rgba(0,0,0,0.02)] transition-transform duration-300 ease-in-out flex flex-col',
+          'fixed lg:static inset-y-0 left-0 z-40 w-72 bg-white/70 backdrop-blur-xl border-r border-white/50 shadow-[4px_0_24px_rgba(0,0,0,0.02)] transition-transform duration-300 ease-in-out flex flex-col',
           !sidebarOpen && '-translate-x-full lg:translate-x-0 lg:w-24'
         )}
       >
@@ -371,7 +464,7 @@ const Dashboard: React.FC = () => {
       {/* Main Content */}
       <main className="flex-1 flex flex-col relative z-10 h-screen overflow-hidden">
         {/* Top Header */}
-        <header className="h-20 bg-white/40 backdrop-blur-md flex items-center justify-between px-8 sticky top-0 z-20">
+        <header className="h-20 bg-white/40 backdrop-blur-md flex items-center justify-between px-8 sticky top-0 z-20 shadow-sm border-b border-white/50">
           <div className="flex items-center gap-4">
             <button onClick={() => setSidebarOpen(!sidebarOpen)} className="p-2 hover:bg-purple-50 rounded-xl text-gray-500 lg:hidden transition-colors">
               <Menu className="w-5 h-5" />
@@ -383,22 +476,61 @@ const Dashboard: React.FC = () => {
                 placeholder="Search intelligence..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10 pr-4 py-2.5 bg-white/50 border border-transparent focus:bg-white focus:border-purple-200 focus:ring-4 focus:ring-purple-500/10 rounded-2xl text-sm w-72 transition-all outline-none shadow-sm"
+                className="pl-10 pr-4 py-2.5 bg-white/60 border border-transparent focus:bg-white focus:border-purple-200 focus:ring-4 focus:ring-purple-500/10 rounded-2xl text-sm w-72 transition-all outline-none shadow-sm"
               />
             </div>
           </div>
 
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-4 relative" ref={notificationRef}>
             <button
               onClick={handleRefresh}
               className={cn("p-2.5 rounded-xl hover:bg-purple-50 text-gray-500 hover:text-purple-600 transition-colors", refreshing && "animate-spin text-purple-600")}
             >
               <RefreshCw className="w-5 h-5" />
             </button>
-            <button className="p-2.5 rounded-xl hover:bg-purple-50 text-gray-500 hover:text-purple-600 transition-colors relative">
+
+            <button
+              onClick={() => setNotificationsOpen(!notificationsOpen)}
+              className={cn(
+                "p-2.5 rounded-xl transition-all relative",
+                notificationsOpen ? "bg-purple-100 text-purple-700" : "hover:bg-purple-50 text-gray-500 hover:text-purple-600"
+              )}
+            >
               <Bell className="w-5 h-5" />
-              <span className="absolute top-2.5 right-2.5 w-2 h-2 bg-orange-500 rounded-full ring-2 ring-white"></span>
+              <span className="absolute top-2.5 right-2.5 w-2 h-2 bg-orange-500 rounded-full ring-2 ring-white animate-pulse"></span>
             </button>
+
+            {/* Notification Popover */}
+            {notificationsOpen && (
+              <div className="absolute top-16 right-0 w-80 bg-white rounded-2xl shadow-xl border border-gray-100 p-4 z-50 animate-in fade-in slide-in-from-top-2 duration-200">
+                <div className="flex items-center justify-between mb-4 pb-2 border-b border-gray-50">
+                  <h3 className="font-bold text-gray-900">Notifications</h3>
+                  <span className="text-xs font-medium text-purple-600 bg-purple-50 px-2 py-1 rounded-full">3 New</span>
+                </div>
+                <div className="space-y-3">
+                  {notifications.map(notif => (
+                    <div key={notif.id} className="flex gap-3 items-start p-2 rounded-xl hover:bg-gray-50 transition-colors cursor-pointer group">
+                      <div className={cn(
+                        "p-2 rounded-lg shrink-0",
+                        notif.type === 'alert' ? "bg-red-50 text-red-600" :
+                          notif.type === 'success' ? "bg-green-50 text-green-600" : "bg-blue-50 text-blue-600"
+                      )}>
+                        {notif.type === 'alert' ? <AlertTriangle className="w-4 h-4" /> :
+                          notif.type === 'success' ? <CheckCircle2 className="w-4 h-4" /> : <Info className="w-4 h-4" />}
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-gray-900 group-hover:text-purple-700 transition-colors">{notif.title}</p>
+                        <p className="text-xs text-gray-500 line-clamp-1">{notif.message}</p>
+                        <p className="text-[10px] text-gray-400 mt-1">{notif.time}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <button className="w-full mt-4 py-2 text-xs font-bold text-gray-500 hover:text-purple-700 hover:bg-gray-50 rounded-xl transition-colors">
+                  View All Activity
+                </button>
+              </div>
+            )}
           </div>
         </header>
 
@@ -431,7 +563,10 @@ const Dashboard: React.FC = () => {
                     <span>Filter</span>
                   </button>
                 )}
-                <button className="flex items-center gap-2 px-5 py-2.5 bg-[#AD03DE] text-white shadow-lg shadow-purple-500/30 rounded-xl text-sm font-bold hover:bg-[#8f02b8] transition-all hover:-translate-y-0.5">
+                <button
+                  onClick={handleExportReport}
+                  className="flex items-center gap-2 px-5 py-2.5 bg-[#AD03DE] text-white shadow-lg shadow-purple-500/30 rounded-xl text-sm font-bold hover:bg-[#8f02b8] transition-all hover:-translate-y-0.5 active:scale-95"
+                >
                   <Download className="w-4 h-4" />
                   <span>Export Report</span>
                 </button>
@@ -671,7 +806,7 @@ const Dashboard: React.FC = () => {
                   </div>
                 ) : (
                   filteredResources.map((resource) => (
-                    <div key={resource.id} className="bg-white rounded-3xl p-5 border border-gray-100 shadow-sm hover:shadow-lg transition-all flex flex-col items-center text-center group">
+                    <div key={resource.id} className="bg-white rounded-3xl p-5 border border-gray-100 shadow-sm hover:shadow-lg transition-all flex flex-col items-center text-center group cursor-pointer hover:-translate-y-1">
                       <div className="relative mb-4">
                         <div className={cn(
                           "w-20 h-20 rounded-full flex items-center justify-center mb-2 transition-transform group-hover:scale-110",
