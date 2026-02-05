@@ -58,7 +58,7 @@ const ROLE_OPTIONS: RoleOption[] = [
         icon: <Zap className="w-5 h-5" />,
         description: 'Basic operations',
         color: 'from-purple-300 to-purple-500',
-        requiresGmail: false,
+        requiresGmail: true,
     },
 ];
 

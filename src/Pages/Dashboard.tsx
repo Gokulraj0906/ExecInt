@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import * as XLSX from 'xlsx';
 import {
   BarChart3,
@@ -28,7 +28,6 @@ import {
   CheckCircle2,
   Zap,
   Info,
-  XCircle
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -150,6 +149,42 @@ const Dashboard: React.FC = () => {
   const baseUrl = 'https://ai-execution.onrender.com';
   const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
 
+  // --- RBAC Logic ---
+  const getAuthorizedTabs = (role: string) => {
+    switch (role?.toUpperCase()) {
+      case 'MANAGER':
+        return ['overview', 'factories', 'orders', 'resources', 'assignments'];
+      case 'SUPERVISOR':
+        return ['overview', 'resources', 'assignments'];
+      case 'OPERATOR':
+        return ['overview', 'assignments'];
+      default:
+        return ['overview'];
+    }
+  };
+
+  const navItems = [
+    { id: 'overview', label: 'Dashboard', icon: BarChart3 },
+    { id: 'factories', label: 'Factories', icon: Building2 },
+    { id: 'orders', label: 'Work Orders', icon: AlertTriangle },
+    { id: 'resources', label: 'Resources', icon: Package },
+    { id: 'assignments', label: 'Assignments', icon: Users },
+  ];
+
+  const authorizedTabs = useMemo(() => {
+    return getAuthorizedTabs(state.user?.role || '');
+  }, [state.user?.role]);
+
+  const visibleNavItems = navItems.filter(item => authorizedTabs.includes(item.id));
+
+  // Redirect if on unauthorized tab
+  useEffect(() => {
+    if (!state.loading && state.user && !authorizedTabs.includes(state.activeTab)) {
+      setState(prev => ({ ...prev, activeTab: 'overview' }));
+    }
+  }, [state.user, state.activeTab, authorizedTabs, state.loading]);
+
+
   useEffect(() => {
     fetchDashboardData();
 
@@ -258,7 +293,7 @@ const Dashboard: React.FC = () => {
     XLSX.utils.book_append_sheet(wb, wsOverview, "Overview");
 
     // 2. Factories Sheet
-    if (state.factories.length > 0) {
+    if (state.factories.length > 0 && authorizedTabs.includes('factories')) {
       const wsFactories = XLSX.utils.json_to_sheet(state.factories.map(f => ({
         ID: f.id,
         Name: f.name,
@@ -269,7 +304,7 @@ const Dashboard: React.FC = () => {
     }
 
     // 3. Work Orders Sheet
-    if (state.workOrders.length > 0) {
+    if (state.workOrders.length > 0 && authorizedTabs.includes('orders')) {
       const wsOrders = XLSX.utils.json_to_sheet(state.workOrders.map(o => ({
         Code: o.code,
         Status: o.status,
@@ -283,7 +318,7 @@ const Dashboard: React.FC = () => {
     }
 
     // 4. Resources Sheet
-    if (state.resources.length > 0) {
+    if (state.resources.length > 0 && authorizedTabs.includes('resources')) {
       const wsResources = XLSX.utils.json_to_sheet(state.resources.map(r => ({
         Name: r.name,
         Code: r.code,
@@ -295,7 +330,7 @@ const Dashboard: React.FC = () => {
     }
 
     // 5. Assignments Sheet
-    if (state.allAssignments.length > 0) {
+    if (state.allAssignments.length > 0 && authorizedTabs.includes('assignments')) {
       const wsAssignments = XLSX.utils.json_to_sheet(state.allAssignments.map(a => ({
         Task: a.task.title,
         Status: a.status,
@@ -413,13 +448,7 @@ const Dashboard: React.FC = () => {
         </div>
 
         <nav className="p-4 space-y-2 flex-1">
-          {[
-            { id: 'overview', label: 'Dashboard', icon: BarChart3 },
-            { id: 'factories', label: 'Factories', icon: Building2 },
-            { id: 'orders', label: 'Work Orders', icon: AlertTriangle },
-            { id: 'resources', label: 'Resources', icon: Package },
-            { id: 'assignments', label: 'Assignments', icon: Users },
-          ].map((item) => (
+          {visibleNavItems.map((item) => (
             <button
               key={item.id}
               onClick={() => setState(prev => ({ ...prev, activeTab: item.id as any }))}
@@ -617,7 +646,9 @@ const Dashboard: React.FC = () => {
                         </div>
                         <h3 className="font-bold text-gray-900">Critical Attention Needed</h3>
                       </div>
-                      <button onClick={() => setState(prev => ({ ...prev, activeTab: 'orders' }))} className="text-sm font-bold text-purple-600 hover:text-purple-700 hover:underline">View All</button>
+                      {authorizedTabs.includes('orders') && (
+                        <button onClick={() => setState(prev => ({ ...prev, activeTab: 'orders' }))} className="text-sm font-bold text-purple-600 hover:text-purple-700 hover:underline">View All</button>
+                      )}
                     </div>
                     <div className="p-4 flex-1">
                       {state.atRiskOrders.length === 0 ? (
@@ -664,7 +695,9 @@ const Dashboard: React.FC = () => {
                         </div>
                         <h3 className="font-bold text-gray-900">Live Assignments</h3>
                       </div>
-                      <button onClick={() => setState(prev => ({ ...prev, activeTab: 'assignments' }))} className="text-sm font-bold text-purple-600 hover:text-purple-700 hover:underline">View All</button>
+                      {authorizedTabs.includes('assignments') && (
+                        <button onClick={() => setState(prev => ({ ...prev, activeTab: 'assignments' }))} className="text-sm font-bold text-purple-600 hover:text-purple-700 hover:underline">View All</button>
+                      )}
                     </div>
                     <div className="p-4 flex-1">
                       {state.allAssignments.length === 0 ? (
