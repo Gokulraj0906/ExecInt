@@ -1189,7 +1189,7 @@ const Dashboard: React.FC = () => {
     localStorage.removeItem('userRole');
     localStorage.removeItem('userEmail');
     localStorage.removeItem('userName');
-    window.location.href = '/auth';
+    window.location.href = '/';
   };
 
   // Check if user has access to a specific tab

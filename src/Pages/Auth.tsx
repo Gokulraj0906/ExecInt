@@ -42,7 +42,7 @@ const ROLE_OPTIONS: RoleOption[] = [
         icon: <Shield className="w-5 h-5" />,
         description: 'Full access & control',
         color: 'from-purple-500 to-purple-700',
-        requiresGmail: true,
+        requiresGmail: false,
     },
     {
         value: 'SUPERVISOR',
@@ -58,7 +58,7 @@ const ROLE_OPTIONS: RoleOption[] = [
         icon: <Zap className="w-5 h-5" />,
         description: 'Basic operations',
         color: 'from-purple-300 to-purple-500',
-        requiresGmail: false,
+        requiresGmail: true,
     },
 ];
 
