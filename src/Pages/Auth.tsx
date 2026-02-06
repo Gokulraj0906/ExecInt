@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { Mail, Lock, User, Building2, Eye, EyeOff, Loader2, CheckCircle2, AlertCircle, ArrowRight, Shield, Users, Zap } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Button } from "@/components/ui/button";
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
