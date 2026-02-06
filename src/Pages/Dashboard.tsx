@@ -33,7 +33,6 @@ import {
   AlertCircle,
   Lightbulb,
   RotateCw,
-  Edit,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -257,6 +256,7 @@ const Dashboard: React.FC = () => {
   });
 
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [isMobile, setIsMobile] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [notificationsOpen, setNotificationsOpen] = useState(false);
@@ -302,6 +302,7 @@ const Dashboard: React.FC = () => {
 
   // Suggestion State
   const [showSuggestionsModal, setShowSuggestionsModal] = useState(false);
+  //@ts-ignore
   const [selectedWorkOrderForSuggestion, setSelectedWorkOrderForSuggestion] = useState<string | null>(null);
 
   // Mock Notifications
@@ -312,6 +313,7 @@ const Dashboard: React.FC = () => {
   ];
 
   const notificationRef = useRef<HTMLDivElement>(null);
+  const sidebarRef = useRef<HTMLElement>(null);
 
   const baseUrl = 'https://ai-execution.onrender.com';
   const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
@@ -334,22 +336,43 @@ const Dashboard: React.FC = () => {
   const visibleNavItems = navItems.filter(item => authorizedTabs.includes(item.id));
 
   useEffect(() => {
-    if (!state.loading && state.user && !authorizedTabs.includes(state.activeTab)) {
-      setState(prev => ({ ...prev, activeTab: 'overview' }));
-    }
-  }, [state.user, state.activeTab, authorizedTabs, state.loading]);
-
-  useEffect(() => {
     fetchDashboardData();
 
+    const checkMobile = () => {
+      const mobile = window.innerWidth < 1024;
+      setIsMobile(mobile);
+      if (mobile) {
+        setSidebarOpen(false);
+      } else {
+        setSidebarOpen(true);
+      }
+    };
+
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
+  useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (notificationRef.current && !notificationRef.current.contains(event.target as Node)) {
         setNotificationsOpen(false);
       }
+
+      if (
+        window.innerWidth < 1024 &&
+        sidebarOpen &&
+        sidebarRef.current &&
+        !sidebarRef.current.contains(event.target as Node) &&
+        !(event.target as Element).closest('button[data-toggle-sidebar="true"]')
+      ) {
+        setSidebarOpen(false);
+      }
     };
+
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+  }, [sidebarOpen]);
 
   const fetchDashboardData = async () => {
     try {
@@ -441,6 +464,7 @@ const Dashboard: React.FC = () => {
   const handleTabChange = (tabId: string) => {
     if (authorizedTabs.includes(tabId)) {
       setState(prev => ({ ...prev, activeTab: tabId as any }));
+      if (isMobile) setSidebarOpen(false);
     }
   };
 
@@ -1017,15 +1041,26 @@ const Dashboard: React.FC = () => {
         ></div>
       </div>
 
+      {/* Mobile Backdrop */}
+      {isMobile && sidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-30 backdrop-blur-sm animate-in fade-in duration-200"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
       {/* Sidebar */}
       <aside
+        ref={sidebarRef}
         className={cn(
-          'fixed lg:static inset-y-0 left-0 z-40 w-72 bg-white/70 backdrop-blur-xl border-r border-white/50 shadow-[4px_0_24px_rgba(0,0,0,0.02)] transition-transform duration-300 ease-in-out flex flex-col',
-          !sidebarOpen && '-translate-x-full lg:translate-x-0 lg:w-24'
+          'fixed lg:static inset-y-0 left-0 z-40 bg-white/70 backdrop-blur-xl border-r border-white/50 shadow-[4px_0_24px_rgba(0,0,0,0.02)] transition-all duration-300 ease-in-out flex flex-col',
+          isMobile ? "w-[280px]" : "w-72",
+          !sidebarOpen && (isMobile ? '-translate-x-full' : 'w-24'),
+          !isMobile && !sidebarOpen && "lg:w-24"
         )}
       >
-        <div className="h-24 flex items-center justify-center">
-          <div className="flex items-center gap-3 px-6 w-full">
+        <div className="h-24 flex items-center justify-center relative">
+          <div className={cn("flex items-center gap-3 px-6 w-full", !sidebarOpen && !isMobile && "justify-center px-0")}>
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#AD03DE] to-indigo-600 flex items-center justify-center shadow-lg shadow-purple-500/30 shrink-0">
               <Building2 className="w-6 h-6 text-white" />
             </div>
@@ -1036,6 +1071,15 @@ const Dashboard: React.FC = () => {
               </div>
             )}
           </div>
+          {/* Close button for mobile */}
+          {isMobile && sidebarOpen && (
+            <button
+              onClick={() => setSidebarOpen(false)}
+              className="absolute right-4 top-1/2 -translate-y-1/2 p-2 text-gray-400 hover:bg-gray-100 rounded-lg"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          )}
         </div>
 
         <nav className="p-4 space-y-2 flex-1">
@@ -1094,6 +1138,7 @@ const Dashboard: React.FC = () => {
         <header className="h-20 bg-white/40 backdrop-blur-md flex items-center justify-between px-8 sticky top-0 z-20 shadow-sm border-b border-white/50">
           <div className="flex items-center gap-4">
             <button
+              data-toggle-sidebar="true"
               onClick={() => setSidebarOpen(!sidebarOpen)}
               className="p-2 hover:bg-purple-50 rounded-xl text-gray-500 lg:hidden transition-colors"
             >
@@ -1154,8 +1199,8 @@ const Dashboard: React.FC = () => {
                           notif.type === 'alert'
                             ? 'bg-red-50 text-red-600'
                             : notif.type === 'success'
-                            ? 'bg-green-50 text-green-600'
-                            : 'bg-blue-50 text-blue-600'
+                              ? 'bg-green-50 text-green-600'
+                              : 'bg-blue-50 text-blue-600'
                         )}
                       >
                         {notif.type === 'alert' ? (
@@ -1595,8 +1640,8 @@ const Dashboard: React.FC = () => {
                             task.status === 'COMPLETED'
                               ? 'bg-green-100 text-green-700'
                               : task.status === 'IN_PROGRESS'
-                              ? 'bg-blue-100 text-blue-700'
-                              : 'bg-yellow-100 text-yellow-700'
+                                ? 'bg-blue-100 text-blue-700'
+                                : 'bg-yellow-100 text-yellow-700'
                           )}
                         >
                           {task.status}
@@ -1686,7 +1731,7 @@ const Dashboard: React.FC = () => {
               <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
                 <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
                   <div className="overflow-x-auto">
-                    <table className="w-full">
+                    <table className="w-full min-w-[800px]">
                       <thead className="bg-gray-50 border-b border-gray-100">
                         <tr>
                           <th className="text-left py-4 px-6 text-xs font-bold text-gray-500 uppercase tracking-wider">
@@ -1739,10 +1784,10 @@ const Dashboard: React.FC = () => {
                                     assignment.status === 'APPROVED'
                                       ? 'bg-green-100 text-green-700'
                                       : assignment.status === 'PENDING'
-                                      ? 'bg-yellow-100 text-yellow-700'
-                                      : assignment.status === 'COMPLETED'
-                                      ? 'bg-blue-100 text-blue-700'
-                                      : 'bg-gray-100 text-gray-600'
+                                        ? 'bg-yellow-100 text-yellow-700'
+                                        : assignment.status === 'COMPLETED'
+                                          ? 'bg-blue-100 text-blue-700'
+                                          : 'bg-gray-100 text-gray-600'
                                   )}
                                 >
                                   {assignment.status}
